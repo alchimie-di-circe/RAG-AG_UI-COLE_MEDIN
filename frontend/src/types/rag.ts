@@ -16,6 +16,7 @@ export interface RetrievedChunk {
   metadata: Record<string, unknown>;
   document_title: string;
   document_source: string;
+  chunk_index: number;  // 1-based index within the document (e.g., Chunk 2 of Document A)
   approved: boolean;
 }
 

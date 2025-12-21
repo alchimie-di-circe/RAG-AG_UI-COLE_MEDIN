@@ -25,6 +25,10 @@ class RetrievedChunk(BaseModel):
     )
     document_title: str = Field(description="Title of the source document")
     document_source: str = Field(description="Source/path of the document")
+    chunk_index: int = Field(
+        default=1,
+        description="1-based index of this chunk within its document (e.g., Chunk 2 of Document A)",
+    )
     approved: bool = Field(
         default=False, description="Whether this chunk has been approved by the user"
     )

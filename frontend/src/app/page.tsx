@@ -11,13 +11,11 @@
 
 import { useEffect } from "react";
 import { useAgent } from "@copilotkit/react-core/v2";
-import { CopilotSidebar } from "@copilotkit/react-ui";
+import { CopilotChat } from "@copilotkit/react-ui";
 
 import type { RAGState, SearchConfig } from "@/types/rag";
 import { initialRAGState } from "@/types/rag";
 import { ChunksPanel } from "@/components/ChunksPanel";
-import { SearchControls } from "@/components/SearchControls";
-import { ConversationControls } from "@/components/ConversationControls";
 
 export default function RAGAgentPage() {
   // THE KEY HOOK - demonstrates agent.state reading
@@ -96,48 +94,38 @@ export default function RAGAgentPage() {
   };
 
   return (
-    <main className="flex h-screen">
-      {/* Left side: Chunks panel with controls */}
+    <main className="flex h-screen bg-slate-900">
+      {/* Left side: Chunks panel (takes remaining space) */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Search configuration controls */}
-        <SearchControls
-          config={state.search_config}
-          onConfigChange={handleConfigChange}
-        />
-
-        {/* Retrieved chunks display */}
-        <div className="flex-1 overflow-hidden">
-          <ChunksPanel
-            chunks={state.retrieved_chunks}
-            approvedIds={state.approved_chunk_ids}
-            isSearching={state.is_searching}
-            currentQuery={state.current_query?.query}
-            onApprovalChange={handleApprovalChange}
-            onSelectAll={handleSelectAll}
-            onDeselectAll={handleDeselectAll}
-          />
-        </div>
-
-        {/* Conversation controls */}
-        <ConversationControls
-          onReset={handleReset}
+        <ChunksPanel
+          chunks={state.retrieved_chunks}
+          approvedIds={state.approved_chunk_ids}
+          isSearching={state.is_searching}
+          currentQuery={state.current_query?.query}
+          searchConfig={state.search_config}
           messageCount={messages.length}
-          searchCount={state.search_history.length}
+          onApprovalChange={handleApprovalChange}
+          onSelectAll={handleSelectAll}
+          onDeselectAll={handleDeselectAll}
+          onConfigChange={handleConfigChange}
+          onReset={handleReset}
         />
       </div>
 
-      {/* Right side: Chat sidebar */}
-      <CopilotSidebar
-        defaultOpen={true}
-        labels={{
-          title: "RAG Assistant",
-          initial: `Welcome! Ask me anything about AI industry news.
+      {/* Right side: Chat (fixed width) */}
+      <div className="w-[420px] flex-shrink-0 border-l border-slate-700/50 bg-slate-900/50 backdrop-blur-sm">
+        <CopilotChat
+          labels={{
+            title: "RAG Assistant",
+            initial: `Welcome! Ask me anything about AI industry news.
 
 Try: "What is OpenAI's latest funding?" or "Tell me about NVIDIA's market share"
 
-I'll search the knowledge base and show sources on the left panel.`,
-        }}
-      />
+I'll search the knowledge base and show sources for your review.`,
+          }}
+          className="h-full"
+        />
+      </div>
     </main>
   );
 }

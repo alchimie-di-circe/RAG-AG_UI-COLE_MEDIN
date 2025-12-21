@@ -4,8 +4,10 @@ This agent demonstrates the full power of CopilotKit's useAgent hook through
 a natural human-in-the-loop source validation workflow.
 """
 
+from collections import defaultdict
 from datetime import datetime
 
+import structlog
 from ag_ui.core import EventType, StateSnapshotEvent
 from pydantic_ai import Agent, RunContext, ToolReturn
 from pydantic_ai.ag_ui import StateDeps
@@ -15,6 +17,27 @@ from prompts import MAIN_SYSTEM_PROMPT
 from providers import get_llm_model
 from state import RAGState, RetrievedChunk, SearchQuery
 from tools import get_chunk_count, hybrid_search, semantic_search
+
+logger = structlog.get_logger(__name__)
+
+
+def _assign_chunk_indices(chunks: list[RetrievedChunk]) -> list[RetrievedChunk]:
+    """Assign per-document chunk indices to a list of chunks.
+
+    For each document, chunks are numbered 1, 2, 3, etc. based on
+    the order they appear in the list (which is typically sorted by similarity).
+
+    Args:
+        chunks: List of chunks to assign indices to.
+
+    Returns:
+        The same list with chunk_index fields populated.
+    """
+    doc_counters: dict[str, int] = defaultdict(int)
+    for chunk in chunks:
+        doc_counters[chunk.document_id] += 1
+        chunk.chunk_index = doc_counters[chunk.document_id]
+    return chunks
 
 # Create the RAG agent with AGUI support
 rag_agent = Agent(
@@ -66,6 +89,14 @@ async def search_knowledge_base(
         agent_deps = AgentDependencies()
         await agent_deps.initialize()
 
+        logger.info(
+            "search.started",
+            query=query,
+            search_type=config.search_type,
+            max_results=config.max_results,
+            similarity_threshold=config.similarity_threshold,
+        )
+
         # Perform the search based on user's config
         if config.search_type == "hybrid":
             results = await hybrid_search(
@@ -114,9 +145,23 @@ async def search_knowledge_base(
                 for result in results
             ]
 
-        # Update state with results
-        state.retrieved_chunks = chunks
+        # Assign per-document chunk indices and update state
+        state.retrieved_chunks = _assign_chunk_indices(chunks)
         state.is_searching = False
+
+        logger.info(
+            "search.completed",
+            query=query,
+            chunks_found=len(chunks),
+            chunks=[
+                {
+                    "chunk_index": c.chunk_index,
+                    "document_title": c.document_title,
+                    "similarity": f"{c.similarity:.0%}",
+                }
+                for c in chunks
+            ],
+        )
         state.awaiting_approval = len(chunks) > 0
         state.approved_chunk_ids = []  # Reset approvals for new search
 
@@ -132,9 +177,12 @@ async def search_knowledge_base(
         # Clean up
         await agent_deps.cleanup()
 
-        # Build message for the LLM
+        # Build message for the LLM (include chunk indices so agent can reference them)
         if chunks:
-            sources = [f"- {c.document_title} ({c.similarity:.0%} match)" for c in chunks[:5]]
+            sources = [
+                f"- Chunk {c.chunk_index} of {c.document_title} ({c.similarity:.0%} match)"
+                for c in chunks[:5]
+            ]
             message = f"Found {len(chunks)} sources. They are now displayed in the UI for user review.\n" + "\n".join(sources)
         else:
             message = "No relevant sources found in the knowledge base."
@@ -166,6 +214,82 @@ async def search_knowledge_base(
                 ),
             ],
         )
+
+
+@rag_agent.tool
+async def get_state(
+    ctx: RunContext[StateDeps[RAGState]],
+) -> ToolReturn:
+    """Get the current UI state including retrieved chunks, user selections, and settings.
+
+    WHEN TO USE: When you need to know ANYTHING about the current state of the application.
+    This includes:
+    - What chunks have been retrieved
+    - Which chunks the user has selected/approved
+    - Current search settings (similarity threshold, max results, search type)
+    - The current query
+    - Whether a search is in progress
+
+    IMPORTANT: You do NOT automatically see the UI state. You MUST call this tool to
+    check what the user has done in the interface (selections, settings changes, etc.).
+
+    Args:
+        ctx: Agent runtime context with state dependencies.
+
+    Returns:
+        ToolReturn with a summary of the current application state.
+    """
+    state = ctx.deps.state
+    approved_ids = set(state.approved_chunk_ids)
+
+    # Build state summary
+    lines = ["## Current Application State\n"]
+
+    # Search status
+    if state.is_searching:
+        lines.append("**Status:** Currently searching...")
+    elif state.is_synthesizing:
+        lines.append("**Status:** Currently synthesizing answer...")
+    else:
+        lines.append("**Status:** Idle")
+
+    # Current query
+    if state.current_query:
+        lines.append(f"**Last Query:** \"{state.current_query.query}\"")
+
+    # Search config
+    config = state.search_config
+    lines.append("\n**Search Settings:**")
+    lines.append(f"- Similarity threshold: {config.similarity_threshold:.0%}")
+    lines.append(f"- Max results: {config.max_results}")
+    lines.append(f"- Search type: {config.search_type}")
+
+    # Retrieved chunks
+    lines.append(f"\n**Retrieved Chunks:** {len(state.retrieved_chunks)} total")
+    if state.retrieved_chunks:
+        for chunk in state.retrieved_chunks:
+            selected = "SELECTED" if chunk.chunk_id in approved_ids else "not selected"
+            lines.append(
+                f"- Chunk {chunk.chunk_index} of {chunk.document_title} "
+                f"({chunk.similarity:.0%} match) - {selected}"
+            )
+
+    # Selection summary
+    selected_count = len(approved_ids)
+    lines.append(f"\n**User Selections:** {selected_count} chunk(s) selected")
+    if selected_count > 0:
+        selected_chunks = [c for c in state.retrieved_chunks if c.chunk_id in approved_ids]
+        for chunk in selected_chunks:
+            lines.append(f"- Chunk {chunk.chunk_index} of {chunk.document_title}")
+
+    # Error if any
+    if state.error_message:
+        lines.append(f"\n**Error:** {state.error_message}")
+
+    return ToolReturn(
+        return_value="\n".join(lines),
+        metadata=[],
+    )
 
 
 @rag_agent.tool
@@ -240,7 +364,24 @@ async def synthesize_with_sources(
         if chunk.chunk_id in state.approved_chunk_ids
     ]
 
+    logger.info(
+        "synthesis.started",
+        total_chunks_available=len(state.retrieved_chunks),
+        approved_chunk_ids=state.approved_chunk_ids,
+        approved_chunks_count=len(approved_chunks),
+        approved_chunks=[
+            {
+                "chunk_index": c.chunk_index,
+                "document_title": c.document_title,
+                "similarity": f"{c.similarity:.0%}",
+                "content_preview": c.content[:100] + "..." if len(c.content) > 100 else c.content,
+            }
+            for c in approved_chunks
+        ],
+    )
+
     if not approved_chunks:
+        logger.warning("synthesis.no_approved_chunks")
         return ToolReturn(
             return_value="No sources have been approved yet. Please wait for the user to approve sources in the UI.",
             metadata=[],
@@ -251,15 +392,26 @@ async def synthesize_with_sources(
     state.awaiting_approval = False
     state.error_message = None
 
-    # Build context from approved chunks
+    # Build context from approved chunks (include chunk index for reference)
     context_parts = []
     for chunk in approved_chunks:
-        context_parts.append(f"[Source: {chunk.document_title}]\n{chunk.content}")
+        context_parts.append(
+            f"[Source: Chunk {chunk.chunk_index} of {chunk.document_title}]\n{chunk.content}"
+        )
 
     context = "\n\n---\n\n".join(context_parts)
 
     # Mark synthesis complete
     state.is_synthesizing = False
+
+    logger.info(
+        "synthesis.completed",
+        chunks_used=len(approved_chunks),
+        chunk_summaries=[
+            f"Chunk {c.chunk_index} of {c.document_title}"
+            for c in approved_chunks
+        ],
+    )
 
     return ToolReturn(
         return_value=f"Here are the {len(approved_chunks)} approved sources to use for your answer:\n\n{context}",
