@@ -2,7 +2,7 @@
   "name": "RAG AI Agent with CopilotKit 1.5 + Pydantic AI",
   "image": "mcr.microsoft.com/devcontainers/python:3.12-bullseye",
   "workspaceFolder": "/workspaces/RAG-AG_UI-COLE_MEDIN/frontend",
-  "workspaceMount": "source=${localEnv:HOME}/.ssh,target=${containerEnv:HOME}/.ssh,type=bind,consistency=cached",
+  
   "features": {
     "ghcr.io/devcontainers/features/node:20": {},
     "ghcr.io/devcontainers-contrib/features/1password-cli:1": {},
@@ -48,7 +48,7 @@
       }
     }
   },
-  "postCreateCommand": "bash .devcontainer/post-create.sh",
+  "postCreateCommand": "bash /workspaces/RAG-AG_UI-COLE_MEDIN/.devcontainer/post-create.sh",
   "postStartCommand": "eval $(direnv export bash)",
   "forwardPorts": [3000, 8000, 5173, 5432],
   "portsAttributes": {
