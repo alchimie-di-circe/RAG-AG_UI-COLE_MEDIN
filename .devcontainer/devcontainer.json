@@ -1,0 +1,33 @@
+{
+  "name": "RAG AI Agent Development",
+  "image": "mcr.microsoft.com/devcontainers/python:3.11-bullseye",
+  "features": {
+    "ghcr.io/devcontainers/features/node:18": {}
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "charliermarsh.ruff",
+        "ms-vscode.makefile-tools"
+      ],
+      "settings": {
+        "python.defaultInterpreterPath": "/usr/local/bin/python",
+        "python.linting.enabled": true,
+        "python.linting.pylintEnabled": false,
+        "[python]": {
+          "editor.defaultFormatter": "ms-python.python",
+          "editor.formatOnSave": true
+        }
+      }
+    }
+  },
+  "postCreateCommand": "bash .devcontainer/post-create.sh",
+  "forwardPorts": [3000, 8000, 5173],
+  "portsAttributes": {
+    "3000": {"label": "App", "onAutoForward": "notify"},
+    "8000": {"label": "Backend API", "onAutoForward": "notify"},
+    "5173": {"label": "Frontend Dev", "onAutoForward": "notify"}
+  }
+}
