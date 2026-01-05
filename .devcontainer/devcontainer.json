@@ -1,8 +1,22 @@
 {
-  "name": "RAG AI Agent Development",
+  "name": "RAG AI Agent with CopilotKit 1.5 + Pydantic AI",
   "image": "mcr.microsoft.com/devcontainers/python:3.11-bullseye",
+  "workspaceFolder": "/workspaces/RAG-AG_UI-COLE_MEDIN/frontend",
+  "workspaceMount": "source=${localEnv:HOME}/.ssh,target=/root/.ssh,type=bind,consistency=cached",
   "features": {
-    "ghcr.io/devcontainers/features/node:18": {}
+    "ghcr.io/devcontainers/features/node:18": {},
+    "ghcr.io/devcontainers-contrib/features/1password-cli:1": {},
+    "ghcr.io/devcontainers-contrib/features/direnv:2": {}
+  },
+  "remoteEnv": {
+    "NODE_ENV": "${localEnv:NODE_ENV:development}",
+    "COPILOTKIT_API_KEY": "${localEnv:COPILOTKIT_API_KEY}",
+    "NEXT_PUBLIC_BACKEND_URL": "${localEnv:NEXT_PUBLIC_BACKEND_URL:http://localhost:8000}",
+    "ANTHROPIC_API_KEY": "${localEnv:ANTHROPIC_API_KEY}",
+    "OPENAI_API_KEY": "${localEnv:OPENAI_API_KEY}",
+    "NEXT_PUBLIC_API_KEY": "${localEnv:NEXT_PUBLIC_API_KEY}",
+    "POSTGRES_URL": "postgresql://postgres:postgres@postgres:5432/ragdb",
+    "PGVECTOR_ENABLED": "true"
   },
   "customizations": {
     "vscode": {
@@ -10,7 +24,13 @@
         "ms-python.python",
         "ms-python.vscode-pylance",
         "charliermarsh.ruff",
-        "ms-vscode.makefile-tools"
+        "ms-vscode.makefile-tools",
+        "1Password.op-browser",
+        "direnv.direnv",
+        "esbenp.prettier-vscode",
+        "bradlc.vscode-tailwindcss",
+        "dbaeumer.vscode-eslint",
+        "firsttris.vscode-jest-runner"
       ],
       "settings": {
         "python.defaultInterpreterPath": "/usr/local/bin/python",
@@ -19,15 +39,44 @@
         "[python]": {
           "editor.defaultFormatter": "ms-python.python",
           "editor.formatOnSave": true
-        }
+        },
+        "[json]": {
+          "editor.formatOnSave": true
+        },
+        "editor.formatOnSave": true,
+        "editor.defaultFormatter": "esbenp.prettier-vscode"
       }
     }
   },
   "postCreateCommand": "bash .devcontainer/post-create.sh",
-  "forwardPorts": [3000, 8000, 5173],
+  "postStartCommand": "direnv allow && eval $(direnv export bash)",
+  "forwardPorts": [3000, 8000, 5173, 5432],
   "portsAttributes": {
-    "3000": {"label": "App", "onAutoForward": "notify"},
-    "8000": {"label": "Backend API", "onAutoForward": "notify"},
-    "5173": {"label": "Frontend Dev", "onAutoForward": "notify"}
+    "3000": {
+      "label": "Next.js Frontend",
+      "onAutoForward": "notify"
+    },
+    "8000": {
+      "label": "FastAPI Backend",
+      "onAutoForward": "notify"
+    },
+    "5173": {
+      "label": "Vite Dev Server",
+      "onAutoForward": "notify"
+    },
+    "5432": {
+      "label": "PostgreSQL Database",
+      "onAutoForward": "silent"
+    }
+  },
+  "containerEnv": {
+    "PYTHONUNBUFFERED": "1",
+    "PIP_NO_CACHE_DIR": "1"
+  },
+  "mounts": [
+    "source=${localEnv:HOME}/.op/config,target=/root/.op/config,type=bind,consistency=cached"
+  ],
+  "docker": {
+    "network": "ragnet"
   }
 }
