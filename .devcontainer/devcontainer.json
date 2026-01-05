@@ -74,7 +74,7 @@
     "PIP_NO_CACHE_DIR": "1"
   },
   "mounts": [
-    "source=${localEnv:HOME}/.op/config,target=/root/.op/config,type=bind,consistency=cached"
+    "source=${localEnv:HOME}/.op/config,target=${containerEnv:HOME}/.op/config,type=bind,consistency=cached"
   ],
   "docker": {
     "network": "ragnet"
