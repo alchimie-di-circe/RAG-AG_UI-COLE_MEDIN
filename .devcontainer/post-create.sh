@@ -16,6 +16,8 @@ cd /workspaces/RAG-AG_UI-COLE_MEDIN
 # Install uv if not already installed
 if ! command -v uv &> /dev/null; then
     curl -LsSf https://astral.sh/uv/install.sh | sh
+    # Persist the path change for future sessions
+    echo 'export PATH="$HOME/.cargo/bin:$PATH"' >> "$HOME/.bashrc"
     export PATH="$HOME/.cargo/bin:$PATH"
 fi
 
